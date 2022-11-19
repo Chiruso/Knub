@@ -21,7 +21,7 @@ import { noop } from "../utils";
 import { PluginMessageCommandManager } from "../commands/messageCommands/PluginMessageCommandManager";
 import { PluginConfigManager } from "../config/PluginConfigManager";
 import { BasePluginType } from "./pluginTypes";
-import { parseSignature } from "knub-command-manager";
+import { parseSignature } from "@chiruso/knub-command-manager";
 import { expect } from "chai";
 import { guildPlugin, globalPlugin, GuildPluginBlueprint } from "./PluginBlueprint";
 import { BeforeLoadPluginData, GuildPluginData, isGlobalPluginData } from "./PluginData";

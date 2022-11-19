@@ -1,4 +1,4 @@
-import { CommandManager, IMatchedCommand, isError } from "knub-command-manager";
+import { CommandManager, IMatchedCommand, isError } from "@chiruso/knub-command-manager";
 import {
   checkCommandCooldown,
   checkCommandLocks,

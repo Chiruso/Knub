@@ -1,5 +1,5 @@
 {
-  "name": "knub",
+  "name": "@chiruso/knub",
   "version": "30.0.0-beta.46",
   "description": "A bot framework for Discord",
   "author": "Miikka <contact@mivir.fi>",
@@ -27,7 +27,7 @@
   "dependencies": {
     "discord-api-types": "^0.37.10",
     "discord.js": "^14",
-    "knub-command-manager": "^9.1.0",
+    "@chiruso/knub-command-manager": "^9.1.0",
     "ts-essentials": "^9"
   },
   "devDependencies": {

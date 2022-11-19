@@ -5,7 +5,7 @@ import {
   string,
   switchOption,
   TypeConversionError,
-} from "knub-command-manager";
+} from "@chiruso/knub-command-manager";
 import { disableCodeBlocks } from "../../helpers";
 import { getChannelId, getRoleId, getUserId } from "../../utils";
 import { Channel, ChannelType, GuildMember, GuildTextBasedChannel, Role, User, VoiceChannel } from "discord.js";

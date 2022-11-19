@@ -8,7 +8,7 @@ import {
   toSafeSignature as toMessageCommandSafeSignature,
   TSafeSignature as MessageCommandSafeSignature,
   TSignature as MessageCommandSignature,
-} from "knub-command-manager";
+} from "@chiruso/knub-command-manager";
 import { Lock } from "../../locks/LockManager";
 import { AnyPluginData, GuildPluginData } from "../../plugins/PluginData";
 import { hasPermission } from "../../helpers";

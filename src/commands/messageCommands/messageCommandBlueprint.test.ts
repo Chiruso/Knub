@@ -1,4 +1,4 @@
-import { number, string } from "knub-command-manager";
+import { number, string } from "@chiruso/knub-command-manager";
 import { expect } from "chai";
 import { BasePluginType } from "../../index";
 import { guildPluginMessageCommand, globalPluginMessageCommand } from "./messageCommandBlueprint";
