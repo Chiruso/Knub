@@ -3,10 +3,13 @@ import {
   GlobalPluginBlueprint,
   GlobalPluginData,
   guildPluginSlashCommand,
+  guildPluginSlashGroup,
   Knub,
-  LockManager, slashOptions
+  LockManager,
+  slashOptions
 } from "../index";
 import {
+  assertTypeEquals,
   createMockClient,
   createMockGuild,
   createMockMember,
@@ -14,7 +17,7 @@ import {
   createMockRole,
   createMockTextChannel,
   createMockUser,
-  sleep,
+  sleep
 } from "../testUtils";
 import * as assert from "assert";
 import { noop } from "../utils";
@@ -23,13 +26,16 @@ import { PluginConfigManager } from "../config/PluginConfigManager";
 import { BasePluginType } from "./pluginTypes";
 import { parseSignature } from "@chiruso/knub-command-manager";
 import { expect } from "chai";
-import { guildPlugin, globalPlugin, GuildPluginBlueprint } from "./PluginBlueprint";
+import { globalPlugin, guildPlugin, GuildPluginBlueprint } from "./PluginBlueprint";
 import { BeforeLoadPluginData, GuildPluginData, isGlobalPluginData } from "./PluginData";
 import { GuildPluginEventManager } from "../events/GuildPluginEventManager";
 import { GlobalPluginEventManager } from "../events/GlobalPluginEventManager";
-import { typedGlobalEventListener, typedGuildEventListener } from "../events/EventListenerBlueprint";
+import {
+  guildPluginEventListener,
+  globalPluginEventListener
+} from "../events/EventListenerBlueprint";
 import { guildPluginMessageCommand } from "../commands/messageCommands/messageCommandBlueprint";
-import { TextChannel } from "discord.js";
+import { ChatInputCommandInteraction, TextChannel } from "discord.js";
 import { PluginSlashCommandManager } from "../commands/slashCommands/PluginSlashCommandManager";
 
 type AssertEquals<TActual, TExpected> = TActual extends TExpected ? true : false;
@@ -46,19 +52,22 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           messageCommands: [guildPluginMessageCommand({ trigger: "foo", permission: null, run: noop })],
 
-          events: [typedGuildEventListener({ event: "messageCreate", listener: noop })],
+          slashCommands: [guildPluginSlashCommand({ name: "bar", description: "", signature: [], run: noop })],
+
+          events: [guildPluginEventListener({ event: "messageCreate", listener: noop })],
 
           afterLoad(pluginData) {
             setTimeout(() => {
-              // The command above should be loaded
               assert.strictEqual(pluginData.messageCommands.getAll().length, 1);
 
-              // The event listener above should be loaded
-              // There is also a default message listener that's always registered
-              assert.strictEqual(pluginData.events.getListenerCount(), 2);
+              assert.strictEqual(pluginData.slashCommands.getAll().length, 1);
+
+              // There are also default message and interaction listeners that are always registered, hence 3
+              assert.strictEqual(pluginData.events.getListenerCount(), 3);
 
               done();
             }, 1);
@@ -69,6 +78,7 @@ describe("PluginBlueprint", () => {
         const knub = new Knub(client, {
           guildPlugins: [PluginToLoad],
           options: {
+            autoRegisterSlashCommands: false,
             getEnabledGuildPlugins() {
               return ["plugin-to-load"];
             },
@@ -99,9 +109,10 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           events: [
-            typedGuildEventListener({
+            guildPluginEventListener({
               event: "messageCreate",
               listener({ pluginData, args }) {
                 assert.strictEqual(pluginData.guild.id, args.message.channel.guild.id);
@@ -156,10 +167,11 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           events: [
             // @ts-expect-error: "userUpdate" is not a valid guild event
-            typedGuildEventListener({
+            guildPluginEventListener({
               // @ts-expect-error: "userUpdate" is not a valid guild event
               event: "userUpdate",
               listener() {
@@ -201,8 +213,10 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad = globalPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           events: [
-            typedGlobalEventListener({
+            globalPluginEventListener({
               event: "userUpdate",
               listener() {
                 done();
@@ -236,8 +250,10 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad = globalPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           events: [
-            typedGlobalEventListener({
+            globalPluginEventListener({
               event: "messageCreate",
               listener({ pluginData, args }) {
                 assert.ok(isGlobalPluginData(pluginData));
@@ -267,159 +283,213 @@ describe("PluginBlueprint", () => {
       })();
     });
 
-    it("command permissions", async () => {
-      const infoCmdCallUsers: string[] = [];
-      const serverCmdCallUsers: string[] = [];
-      const pingCmdCallUsers: string[] = [];
+    describe("Message commands", () => {
+      it("command permissions", async () => {
+        const infoCmdCallUsers: string[] = [];
+        const serverCmdCallUsers: string[] = [];
+        const pingCmdCallUsers: string[] = [];
 
-      interface PluginType extends BasePluginType {
-        config: {
-          can_use_info_cmd: boolean;
-          can_use_server_cmd: boolean;
-          can_use_ping_cmd: boolean;
-        };
-      }
-
-      const TestPlugin = guildPlugin<PluginType>()({
-        name: "test-plugin",
-
-        defaultOptions: {
+        interface PluginType extends BasePluginType {
           config: {
-            can_use_info_cmd: false,
-            can_use_server_cmd: false,
-            can_use_ping_cmd: false,
+            can_use_info_cmd: boolean;
+            can_use_server_cmd: boolean;
+            can_use_ping_cmd: boolean;
+          };
+        }
+
+        const TestPlugin = guildPlugin<PluginType>()({
+          name: "test-plugin",
+          configParser: (input) => input as PluginType["config"],
+
+          defaultOptions: {
+            config: {
+              can_use_info_cmd: false,
+              can_use_server_cmd: false,
+              can_use_ping_cmd: false,
+            },
           },
-        },
 
-        commands: [
-          guildPluginMessageCommand({
-            trigger: "info",
-            permission: "can_use_info_cmd",
-            run({ message }) {
-              infoCmdCallUsers.push(message.author.id);
-            },
-          }),
-          guildPluginMessageCommand({
-            trigger: "server",
-            permission: "can_use_server_cmd",
-            run({ message }) {
-              serverCmdCallUsers.push(message.author.id);
-            },
-          }),
-          guildPluginMessageCommand({
-            trigger: "ping",
-            permission: "can_use_ping_cmd",
-            run({ message }) {
-              pingCmdCallUsers.push(message.author.id);
-            },
-          }),
-        ],
-      });
-
-      const client = createMockClient();
-      const guild = createMockGuild(client);
-
-      const user1 = createMockUser(client);
-      const user2 = createMockUser(client);
-      const user3 = createMockUser(client);
-
-      const role = createMockRole(guild);
-      const _member3 = createMockMember(guild, user3, { roles: [role.id] });
-
-      const knub = new Knub(client, {
-        guildPlugins: [TestPlugin],
-        options: {
-          getEnabledGuildPlugins() {
-            return ["test-plugin"];
-          },
-          getConfig() {
-            return {
-              prefix: "!",
-              plugins: {
-                "test-plugin": {
-                  overrides: [
-                    {
-                      user: user1.id,
-                      config: {
-                        can_use_info_cmd: true,
-                      },
-                    },
-                    {
-                      user: user2.id,
-                      config: {
-                        can_use_server_cmd: true,
-                      },
-                    },
-                    {
-                      role: role.id,
-                      config: {
-                        can_use_ping_cmd: true,
-                      },
-                    },
-                  ],
-                },
+          messageCommands: [
+            guildPluginMessageCommand({
+              trigger: "info",
+              permission: "can_use_info_cmd",
+              run({ message }) {
+                infoCmdCallUsers.push(message.author.id);
               },
-            };
+            }),
+            guildPluginMessageCommand({
+              trigger: "server",
+              permission: "can_use_server_cmd",
+              run({ message }) {
+                serverCmdCallUsers.push(message.author.id);
+              },
+            }),
+            guildPluginMessageCommand({
+              trigger: "ping",
+              permission: "can_use_ping_cmd",
+              run({ message }) {
+                pingCmdCallUsers.push(message.author.id);
+              },
+            }),
+          ],
+        });
+
+        const client = createMockClient();
+        const guild = createMockGuild(client);
+
+        const user1 = createMockUser(client);
+        const user2 = createMockUser(client);
+        const user3 = createMockUser(client);
+
+        const role = createMockRole(guild);
+        const _member3 = createMockMember(guild, user3, { roles: [role.id] });
+
+        const knub = new Knub(client, {
+          guildPlugins: [TestPlugin],
+          options: {
+            getEnabledGuildPlugins() {
+              return ["test-plugin"];
+            },
+            getConfig() {
+              return {
+                prefix: "!",
+                plugins: {
+                  "test-plugin": {
+                    overrides: [
+                      {
+                        user: user1.id,
+                        config: {
+                          can_use_info_cmd: true,
+                        },
+                      },
+                      {
+                        user: user2.id,
+                        config: {
+                          can_use_server_cmd: true,
+                        },
+                      },
+                      {
+                        role: role.id,
+                        config: {
+                          can_use_ping_cmd: true,
+                        },
+                      },
+                    ],
+                  },
+                },
+              };
+            },
+            logFn: noop,
           },
-          logFn: noop,
-        },
+        });
+
+        knub.initialize();
+        client.emit("connect");
+        client.emit("ready", client);
+        await sleep(10);
+
+        client.ws.emit("GUILD_CREATE", guild);
+        await sleep(10);
+
+        const channel = createMockTextChannel(client, guild.id);
+
+        // !info
+        const infoFromUser1Msg = createMockMessage(client, channel, user1, { content: "!info" });
+        client.emit("messageCreate", infoFromUser1Msg);
+        await sleep(10);
+        const infoFromUser2Msg = createMockMessage(client, channel, user2, { content: "!info" });
+        client.emit("messageCreate", infoFromUser2Msg);
+        await sleep(10);
+
+        // !server
+        const serverFromUser1Msg = createMockMessage(client, channel, user1, { content: "!server" });
+        client.emit("messageCreate", serverFromUser1Msg);
+        await sleep(10);
+        const serverFromUser2Msg = createMockMessage(client, channel, user2, { content: "!server" });
+        client.emit("messageCreate", serverFromUser2Msg);
+        await sleep(10);
+
+        // !ping
+        const pingFromUser1Msg = createMockMessage(client, channel, user1, { content: "!ping" });
+        client.emit("messageCreate", pingFromUser1Msg);
+        await sleep(10);
+        const pingFromUser3Msg = createMockMessage(client, channel, user3, { content: "!ping" });
+        client.emit("messageCreate", pingFromUser3Msg);
+        await sleep(10);
+
+        assert.deepStrictEqual(infoCmdCallUsers, [user1.id]);
+        assert.deepStrictEqual(serverCmdCallUsers, [user2.id]);
+        assert.deepStrictEqual(pingCmdCallUsers, [user3.id]);
       });
-
-      knub.initialize();
-      client.emit("connect");
-      client.emit("ready", client);
-      await sleep(10);
-
-      client.ws.emit("GUILD_CREATE", guild);
-      await sleep(10);
-
-      const channel = createMockTextChannel(client, guild.id);
-
-      // !info
-      const infoFromUser1Msg = createMockMessage(client, channel, user1, { content: "!info" });
-      client.emit("messageCreate", infoFromUser1Msg);
-      await sleep(10);
-      const infoFromUser2Msg = createMockMessage(client, channel, user2, { content: "!info" });
-      client.emit("messageCreate", infoFromUser2Msg);
-      await sleep(10);
-
-      // !server
-      const serverFromUser1Msg = createMockMessage(client, channel, user1, { content: "!server" });
-      client.emit("messageCreate", serverFromUser1Msg);
-      await sleep(10);
-      const serverFromUser2Msg = createMockMessage(client, channel, user2, { content: "!server" });
-      client.emit("messageCreate", serverFromUser2Msg);
-      await sleep(10);
-
-      // !ping
-      const pingFromUser1Msg = createMockMessage(client, channel, user1, { content: "!ping" });
-      client.emit("messageCreate", pingFromUser1Msg);
-      await sleep(10);
-      const pingFromUser3Msg = createMockMessage(client, channel, user3, { content: "!ping" });
-      client.emit("messageCreate", pingFromUser3Msg);
-      await sleep(10);
-
-      assert.deepStrictEqual(infoCmdCallUsers, [user1.id]);
-      assert.deepStrictEqual(serverCmdCallUsers, [user2.id]);
-      assert.deepStrictEqual(pingCmdCallUsers, [user3.id]);
     });
 
-    it("slash commands", () => {
-      const SlashTestPlugin = guildPlugin({
-        name: "slash-test-plugin",
-        slashCommands: [
-          guildPluginSlashCommand({
-            name: "echo",
-            description: "Repeat what you said",
-            signature: [
-              slashOptions.string({ name: "text", description: "bar", required: true }),
-            ],
-            run({ interaction, options }) {
-              const foo = options.text;
-              interaction.reply(options.text);
-            },
-          }),
-        ],
+    describe("Slash commands", () => {
+      it("Type inference in slash command function", () => {
+        guildPlugin({
+          name: "slash-test-plugin",
+          configParser: () => ({}),
+
+          slashCommands: [
+            guildPluginSlashCommand({
+              name: "echo",
+              description: "Repeat what you said",
+              signature: [
+                slashOptions.string({ name: "text1", description: "bar", required: true }),
+                slashOptions.string({ name: "text2", description: "bar" }),
+                slashOptions.string({ name: "text3", description: "bar", required: false }),
+              ],
+              run({ interaction, options }) {
+                assertTypeEquals<string, typeof options.text1, true>();
+                assertTypeEquals<null, typeof options.text1, false>(); // Required (required: true), cannot be null
+
+                assertTypeEquals<string, typeof options.text2, true>();
+                assertTypeEquals<null, typeof options.text2, true>(); // Optional (required: omitted), can be null
+
+                assertTypeEquals<string, typeof options.text3, true>();
+                assertTypeEquals<null, typeof options.text3, true>(); // Optional (required: false), can be null
+
+                assertTypeEquals<ChatInputCommandInteraction, typeof interaction, true>();
+              },
+            }),
+          ],
+        });
+      });
+
+      it("Slash command group types", () => {
+        guildPlugin({
+          name: "slash-test-plugin",
+          configParser: () => ({}),
+
+          slashCommands: [
+            guildPluginSlashGroup({
+              name: "top_level_group",
+              description: "",
+              subcommands: [
+                guildPluginSlashCommand({
+                  name: "one_level_down",
+                  description: "",
+                  signature: [],
+                  // eslint-disable-next-line @typescript-eslint/no-empty-function
+                  run() {},
+                }),
+
+                guildPluginSlashGroup({
+                  name: "second_level_group",
+                  description: "",
+                  subcommands: [
+                    guildPluginSlashCommand({
+                      name: "two_levels_down",
+                      description: "",
+                      signature: [],
+                      // eslint-disable-next-line @typescript-eslint/no-empty-function
+                      run() {},
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        });
       });
     });
   });
@@ -429,6 +499,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           beforeLoad() {
             done();
           },
@@ -459,6 +531,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           beforeLoad() {
             done();
           },
@@ -483,6 +557,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           afterLoad() {
             done();
           },
@@ -513,6 +589,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           afterLoad() {
             done();
           },
@@ -537,6 +615,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToUnload: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-unload",
+          configParser: () => ({}),
+
           beforeUnload() {
             done();
           },
@@ -570,6 +650,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           beforeUnload() {
             done();
           },
@@ -596,6 +678,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToUnload: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-unload",
+          configParser: () => ({}),
+
           afterUnload() {
             done();
           },
@@ -629,6 +713,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           afterUnload() {
             done();
           },
@@ -657,6 +743,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           beforeLoad() {
             beforeLoadCalled = true;
@@ -695,6 +782,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           beforeLoad() {
             beforeLoadCalled = true;
@@ -727,6 +815,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToUnload: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-unload",
+          configParser: () => ({}),
 
           beforeUnload() {
             beforeUnloadCalled = true;
@@ -768,6 +857,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToUnload: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-unload",
+          configParser: () => ({}),
 
           beforeUnload() {
             beforeUnloadCalled = true;
@@ -800,6 +890,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           beforeLoad(partialPluginData) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             assert.strictEqual((partialPluginData as any).hasPlugin, undefined);
@@ -834,6 +926,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           beforeLoad(partialPluginData) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             assert.strictEqual((partialPluginData as any).hasPlugin, undefined);
@@ -862,6 +956,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToUnload: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-unload",
+          configParser: () => ({}),
+
           afterUnload(partialPluginData) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             assert.strictEqual((partialPluginData as any).hasPlugin, undefined);
@@ -899,6 +995,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const PluginToLoad: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           afterUnload(partialPluginData) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             assert.strictEqual((partialPluginData as any).hasPlugin, undefined);
@@ -932,6 +1030,8 @@ describe("PluginBlueprint", () => {
 
         const PluginWithPublicInterface: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-with-public-interface",
+          configParser: () => ({}),
+
           public: {
             myFn() {
               return () => {
@@ -943,6 +1043,7 @@ describe("PluginBlueprint", () => {
 
         const PluginWithTests: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-with-tests",
+          configParser: () => ({}),
           dependencies: () => [PluginWithPublicInterface],
           afterLoad(pluginData) {
             getPluginFn = pluginData.getPlugin.bind(pluginData);
@@ -996,6 +1097,8 @@ describe("PluginBlueprint", () => {
 
         const PluginWithPublicInterface: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-with-public-interface",
+          configParser: () => ({}),
+
           public: {
             myFn() {
               return () => {
@@ -1007,6 +1110,7 @@ describe("PluginBlueprint", () => {
 
         const PluginWithTests: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "plugin-with-tests",
+          configParser: () => ({}),
           dependencies: () => [PluginWithPublicInterface],
           afterLoad(pluginData) {
             getPluginFn = pluginData.getPlugin.bind(pluginData);
@@ -1050,15 +1154,25 @@ describe("PluginBlueprint", () => {
   describe("Dependencies", () => {
     it("hasPlugin", (done) => {
       void (async () => {
-        const DependencyToLoad = guildPlugin({ name: "dependency-to-load" });
+        const DependencyToLoad = guildPlugin({
+          name: "dependency-to-load",
+          configParser: () => ({}),
+        });
+
+        const SomeOtherPlugin = guildPlugin({
+          name: "some-other-plugin",
+          configParser: () => ({}),
+        });
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          dependencies: () => [DependencyToLoad],
+          configParser: () => ({}),
+
           afterLoad(pluginData) {
             setTimeout(() => {
               assert.ok(pluginData.hasPlugin(DependencyToLoad));
-              assert.ok(pluginData.hasPlugin({ name: "dependency-to-load" }));
-              assert.ok(!pluginData.hasPlugin({ name: "unknown-plugin" }));
+              assert.ok(!pluginData.hasPlugin(SomeOtherPlugin));
               done();
             }, 50);
           },
@@ -1089,6 +1203,8 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const DependencyToLoad = guildPlugin({
           name: "dependency-to-load",
+          configParser: () => ({}),
+
           public: {
             ok(pluginData) {
               assert.ok(pluginData != null);
@@ -1100,6 +1216,8 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
+
           afterLoad(pluginData) {
             setTimeout(() => {
               const instance = pluginData.getPlugin(DependencyToLoad);
@@ -1133,6 +1251,7 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const DependencyToLoad = guildPlugin({
           name: "dependency-to-load",
+          configParser: (input) => input,
 
           defaultOptions: {
             config: {
@@ -1155,6 +1274,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           defaultOptions: {
             config: {
@@ -1193,12 +1313,19 @@ describe("PluginBlueprint", () => {
 
     it("automatic dependency loading", (done) => {
       void (async () => {
-        const DependencyToLoad = guildPlugin({ name: "dependency-to-load" });
+        const DependencyToLoad = guildPlugin({
+          name: "dependency-to-load",
+          configParser: () => ({}),
+        });
 
-        const OtherDependencyToLoad = guildPlugin({ name: "other-dependency-to-load" });
+        const OtherDependencyToLoad = guildPlugin({
+          name: "other-dependency-to-load",
+          configParser: () => ({}),
+        });
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           dependencies: () => [DependencyToLoad, OtherDependencyToLoad],
 
@@ -1232,14 +1359,19 @@ describe("PluginBlueprint", () => {
 
     it("transitive dependencies", (done) => {
       void (async () => {
-        const DependencyTwo = guildPlugin({ name: "dependency-two" });
+        const DependencyTwo = guildPlugin({
+          name: "dependency-two",
+          configParser: () => ({}),
+        });
         const DependencyOne = guildPlugin({
           name: "dependency-one",
+          configParser: () => ({}),
           dependencies: () => [DependencyTwo],
         });
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
 
           dependencies: () => [DependencyOne],
 
@@ -1275,10 +1407,11 @@ describe("PluginBlueprint", () => {
       void (async () => {
         const Dependency = guildPlugin({
           name: "dependency",
+          configParser: () => ({}),
 
           messageCommands: [guildPluginMessageCommand({ trigger: "foo", permission: null, run: noop })],
 
-          events: [typedGuildEventListener({ event: "messageCreate", listener: noop })],
+          events: [guildPluginEventListener({ event: "messageCreate", listener: noop })],
 
           afterLoad(pluginData) {
             // The command above should *not* be loaded
@@ -1293,6 +1426,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToLoad = guildPlugin({
           name: "plugin-to-load",
+          configParser: () => ({}),
           dependencies: () => [Dependency],
         });
 
@@ -1331,6 +1465,7 @@ describe("PluginBlueprint", () => {
 
         const TestPlugin = guildPlugin<PluginType>()({
           name: "test-plugin",
+          configParser: () => ({}),
 
           defaultOptions: {
             config: {
@@ -1342,7 +1477,7 @@ describe("PluginBlueprint", () => {
             myUserOverride: (pluginData, matchParams, value) => matchParams.userId === value,
           },
 
-          commands: [
+          messageCommands: [
             guildPluginMessageCommand({
               trigger: "foo",
               permission: "can_do",
@@ -1421,6 +1556,7 @@ describe("PluginBlueprint", () => {
 
         const TestPlugin = guildPlugin<PluginType>()({
           name: "test-plugin",
+          configParser: () => ({}),
 
           defaultOptions: {
             config: {
@@ -1435,7 +1571,7 @@ describe("PluginBlueprint", () => {
             },
           },
 
-          commands: [
+          messageCommands: [
             guildPluginMessageCommand({
               trigger: "foo",
               permission: "can_do",
@@ -1519,6 +1655,8 @@ describe("PluginBlueprint", () => {
 
         const TestPlugin = guildPlugin({
           name: "test-plugin",
+          configParser: () => ({}),
+
           messageCommands: [
             guildPluginMessageCommand({
               trigger: "foo",
@@ -1568,6 +1706,8 @@ describe("PluginBlueprint", () => {
       return (async () => {
         const TestPlugin: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "test-plugin",
+          configParser: () => ({}),
+
           beforeLoad(pluginData) {
             assert.ok(pluginData.client != null);
             assert.ok((pluginData.cooldowns as unknown) instanceof CooldownManager);
@@ -1605,6 +1745,8 @@ describe("PluginBlueprint", () => {
       return (async () => {
         const TestPlugin: GlobalPluginBlueprint<GlobalPluginData<BasePluginType>> = {
           name: "test-plugin",
+          configParser: () => ({}),
+
           beforeLoad(pluginData) {
             assert.ok(pluginData.client != null);
             assert.ok((pluginData.cooldowns as unknown) instanceof CooldownManager);
@@ -1635,7 +1777,7 @@ describe("PluginBlueprint", () => {
       void (async () => {
         let msgEvFnCallNum = 0;
 
-        const messageEv = typedGuildEventListener({
+        const messageEv = guildPluginEventListener({
           event: "messageCreate",
           listener() {
             msgEvFnCallNum++;
@@ -1644,6 +1786,7 @@ describe("PluginBlueprint", () => {
 
         const PluginToUnload: GuildPluginBlueprint<GuildPluginData<BasePluginType>> = {
           name: "plugin-to-unload",
+          configParser: () => ({}),
           events: [messageEv],
         };
 
@@ -1693,6 +1836,7 @@ describe("PluginBlueprint", () => {
       const blueprint = guildPlugin({
         name: "my-plugin",
         info: "foo",
+        configParser: () => ({}),
       });
 
       expect(blueprint.name).to.equal("my-plugin");
@@ -1709,6 +1853,7 @@ describe("PluginBlueprint", () => {
       const blueprint = guildPlugin<CustomPluginType>()({
         name: "my-plugin",
         info: "foo",
+        configParser: () => ({}),
 
         // eslint-disable-next-line
         beforeLoad(partialPluginData) {},
@@ -1740,6 +1885,8 @@ describe("PluginBlueprint", () => {
 
       const OtherPlugin = guildPlugin<OtherPluginType>()({
         name: "other-plugin",
+        configParser: () => ({}),
+
         public: {
           myFn(pluginData) {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1754,6 +1901,8 @@ describe("PluginBlueprint", () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const MainPlugin = guildPlugin({
         name: "main-plugin",
+        configParser: () => ({}),
+
         afterLoad(pluginData) {
           const otherPlugin = pluginData.getPlugin(OtherPlugin);
 

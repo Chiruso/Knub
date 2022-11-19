@@ -11,12 +11,12 @@ import {
   createMockUser,
   sleep,
 } from "../testUtils";
-import { ConfigValidationError } from "./ConfigValidationError";
 import { BasePluginType } from "../plugins/pluginTypes";
 import { GuildPluginData } from "../plugins/PluginData";
+import { z } from "zod";
 
 describe("PluginConfigManager", () => {
-  it("merge user config with default config", () => {
+  it("merge user config with default config", async () => {
     interface PluginType extends BasePluginType {
       config: {
         can_do: boolean;
@@ -44,8 +44,13 @@ describe("PluginConfigManager", () => {
             two: 30,
           },
         },
-      }
+      },
+      {
+        levels: {},
+        parser: input => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().can_do).to.equal(true);
     expect(configManager.get().nested.one).to.equal(10);
@@ -53,7 +58,13 @@ describe("PluginConfigManager", () => {
   });
 
   it("merge user overrides with default overrides", async () => {
-    const configManager = new PluginConfigManager(
+    interface PluginType extends BasePluginType {
+      config: {
+        can_do: boolean;
+      };
+    }
+
+    const configManager = new PluginConfigManager<PluginType>(
       {
         config: {
           can_do: false,
@@ -82,8 +93,13 @@ describe("PluginConfigManager", () => {
             },
           },
         ],
-      }
+      },
+      {
+        levels: {},
+        parser: input => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().can_do).to.equal(false);
     expect((await configManager.getMatchingConfig({ level: 20 })).can_do).to.equal(true);
@@ -92,7 +108,13 @@ describe("PluginConfigManager", () => {
   });
 
   it("replace default overrides", async () => {
-    const configManager = new PluginConfigManager(
+    interface PluginType extends BasePluginType {
+      config: {
+        can_do: boolean;
+      };
+    }
+
+    const configManager = new PluginConfigManager<PluginType>(
       {
         config: {
           can_do: false,
@@ -116,118 +138,118 @@ describe("PluginConfigManager", () => {
             },
           },
         ],
-      }
+      },
+      {
+        levels: {},
+        parser: input => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().can_do).to.equal(false);
     expect((await configManager.getMatchingConfig({ level: 50 })).can_do).to.equal(false);
     expect((await configManager.getMatchingConfig({ level: 100 })).can_do).to.equal(true);
   });
 
-  it("Preprocessors", async () => {
-    const configManager = new PluginConfigManager(
+  it("Config parser", async () => {
+    const configSchema = z.object({
+      something: z.number(),
+    });
+    type ConfigSchema = z.TypeOf<typeof configSchema>;
+
+    interface PluginType extends BasePluginType {
+      config: ConfigSchema;
+    }
+
+    const configManager = new PluginConfigManager<PluginType>(
       {
-        config: {},
+        config: {
+          something: 0,
+        },
       },
       {
         config: {
-          someThing: 5,
+          something: "not a number",
         },
       },
-      {},
       {
-        preprocessor(opts) {
-          opts.config.someThing = 7;
-          return opts;
-        },
-      }
-    );
-    await configManager.init();
-
-    expect(configManager.get().someThing).to.equal(7);
-  });
-
-  it("Async preprocessors", async () => {
-    const configManager = new PluginConfigManager(
-      {
-        config: {},
+        levels: {},
+        parser: (input) => configSchema.parse(input),
       },
-      {
-        config: {
-          someThing: 5,
-        },
-      },
-      {},
-      {
-        async preprocessor(opts) {
-          await sleep(1);
-          opts.config.someThing = 20;
-          return opts;
-        },
-      }
-    );
-    await configManager.init();
-
-    expect(configManager.get().someThing).to.equal(20);
-  });
-
-  it("Validators", async () => {
-    const configManager = new PluginConfigManager(
-      {
-        config: {},
-      },
-      {
-        config: {
-          someThing: 5,
-        },
-      },
-      {},
-      {
-        validator() {
-          throw new ConfigValidationError("Test");
-        },
-      }
     );
 
     try {
       await configManager.init();
-    } catch (e) {
-      if (e instanceof ConfigValidationError) {
-        return;
-      }
+    } catch (err) {
+      return;
     }
 
-    assert.fail("Config validator was not called");
+    assert.fail("Config parser did not throw an error");
   });
 
-  it("Async validators", async () => {
-    const configManager = new PluginConfigManager(
+  it("Config parser mutations", async () => {
+    interface PluginType extends BasePluginType {
+      config: {
+        something: number;
+      };
+    }
+
+    const configManager = new PluginConfigManager<PluginType>(
       {
-        config: {},
+        config: {
+          something: 0,
+        },
       },
       {
         config: {
           someThing: 5,
         },
       },
-      {},
       {
-        async validator() {
-          await sleep(1);
-          throw new ConfigValidationError("Test");
+        levels: {},
+        parser: () => {
+          return {
+            something: 7,
+          };
         },
-      }
+      },
     );
+    await configManager.init();
 
-    try {
-      await configManager.init();
-    } catch (e) {
-      if (e instanceof ConfigValidationError) {
-        return;
-      }
+    expect(configManager.get().something).to.equal(7);
+  });
+
+  it("Async config parser", async () => {
+    interface PluginType extends BasePluginType {
+      config: {
+        something: number;
+      };
     }
 
-    assert.fail("Config validator was not called");
+    const configManager = new PluginConfigManager<PluginType>(
+      {
+        config: {
+          something: 0,
+        },
+      },
+      {
+        config: {
+          someThing: 5,
+        },
+      },
+      {
+        levels: {},
+        parser: async () => {
+          await sleep(1);
+          return {
+            something: 7,
+          };
+        },
+      },
+    );
+    await configManager.init();
+
+    expect(configManager.get().something).to.equal(7);
   });
 
   it("getMatchingConfig(): user", async () => {
@@ -258,9 +280,14 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
     configManager.setPluginData({ context: "guild", guild } as GuildPluginData<any>);
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ userId: user.id })).works).to.equal(true);
@@ -295,8 +322,13 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ channelId: channel.id })).works).to.equal(true);
@@ -331,8 +363,13 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ message })).works).to.equal(true);
@@ -366,8 +403,13 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ categoryId })).works).to.equal(true);
@@ -403,8 +445,13 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ message })).works).to.equal(true);
@@ -438,8 +485,13 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ message })).works).to.equal(true);
@@ -473,8 +525,13 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ message })).works).to.equal(true);
@@ -509,9 +566,14 @@ describe("PluginConfigManager", () => {
           },
         ],
       },
-      {}
+      {},
+      {
+        levels: {},
+        parser: (input) => input as PluginType["config"],
+      },
     );
     configManager.setPluginData({ context: "guild", guild } as GuildPluginData<any>);
+    await configManager.init();
 
     expect(configManager.get().works).to.equal(false);
     expect((await configManager.getMatchingConfig({ memberRoles: [role.id] })).works).to.equal(true);

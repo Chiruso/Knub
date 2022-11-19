@@ -1,4 +1,4 @@
-import { BaseConfig, PermissionLevels } from "../config/configTypes";
+import { PermissionLevels } from "../config/configTypes";
 import {
   AnyPluginBlueprint,
   GlobalPluginBlueprint,
@@ -6,13 +6,9 @@ import {
   PluginBlueprintPublicInterface,
   ResolvedPluginBlueprintPublicInterface,
 } from "./PluginBlueprint";
-import path from "path";
-import _fs from "fs";
 import { AnyContext, GlobalContext, GuildContext, GuildPluginMap } from "../types";
 import { KeyOfMap } from "../utils";
 import { Guild, GuildMember, PartialGuildMember } from "discord.js";
-
-const fs = _fs.promises;
 
 export function getMemberLevel(
   levels: PermissionLevels,
@@ -32,24 +28,24 @@ export function getMemberLevel(
   return 0;
 }
 
-export function isGuildContext(ctx: AnyContext<any, any>): ctx is GuildContext<any> {
+export function isGuildContext(ctx: AnyContext): ctx is GuildContext {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return (ctx as any).guildId != null;
 }
 
-export function isGlobalContext(ctx: AnyContext<any, any>): ctx is GuildContext<any> {
+export function isGlobalContext(ctx: AnyContext): ctx is GuildContext {
   return !isGuildContext(ctx);
 }
 
 export function isGuildBlueprintByContext(
-  _ctx: GuildContext<any>,
+  _ctx: GuildContext,
   _blueprint: AnyPluginBlueprint
 ): _blueprint is GuildPluginBlueprint<any> {
   return true;
 }
 
 export function isGlobalBlueprintByContext(
-  _ctx: GlobalContext<any>,
+  _ctx: GlobalContext,
   _blueprint: AnyPluginBlueprint
 ): _blueprint is GlobalPluginBlueprint<any> {
   return true;
@@ -59,31 +55,19 @@ export type PluginPublicInterface<T extends AnyPluginBlueprint> =
   T["public"] extends PluginBlueprintPublicInterface<any> ? ResolvedPluginBlueprintPublicInterface<T["public"]> : null;
 
 /**
- * Load JSON config files from a "config" folder, relative to cwd
+ * By default, return an empty config for all guilds and the global config
  */
-export async function defaultGetConfig(key: string): Promise<any> {
-  const configFile = key ? `${key}.json` : "global.json";
-  const configPath = path.join("config", configFile);
-
-  try {
-    await fs.access(configPath);
-  } catch (e) {
-    return {};
-  }
-
-  const json = await fs.readFile(configPath, { encoding: "utf8" });
-  return JSON.parse(json); // eslint-disable-line @typescript-eslint/no-unsafe-return
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+export function defaultGetConfig() {
+  return {};
 }
 
 /**
- * By default, load all guild plugins that haven't been explicitly disabled
+ * By default, load all available guild plugins
  */
 export function defaultGetEnabledGuildPlugins(
-  ctx: AnyContext<BaseConfig<any>, BaseConfig<any>>,
+  ctx: AnyContext,
   guildPlugins: GuildPluginMap
 ): Array<KeyOfMap<GuildPluginMap>> {
-  const plugins = ctx.config.plugins ?? {};
-  return Array.from(guildPlugins.keys()).filter((pluginName) => {
-    return plugins[pluginName]?.enabled !== false;
-  });
+  return Array.from(guildPlugins.keys());
 }
