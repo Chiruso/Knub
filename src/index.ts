@@ -56,4 +56,4 @@ export { GlobalPluginEventManager } from "./events/GlobalPluginEventManager";
 export { LockManager, Lock } from "./locks/LockManager";
 export { CooldownManager } from "./cooldowns/CooldownManager";
 
-export { TypeConversionError, parseSignature } from "@chiruso/knub-command-manager";
+export { TypeConversionError, parseSignature, TTypeHelperResult, TTypeHelperOpts } from "@chiruso/knub-command-manager";
