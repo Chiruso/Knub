@@ -47,7 +47,6 @@ import { GatewayGuildCreateDispatchData } from "discord-api-types/v10";
 import { performance } from "perf_hooks";
 import { Profiler } from "./Profiler";
 import { GatewayDispatchEvents } from "discord-api-types/gateway/v10";
-import { PluginSlashCommandManager } from "./commands/slashCommands/PluginSlashCommandManager";
 import { SlashCommandBlueprint } from "./commands/slashCommands/slashCommandBlueprint";
 import { SlashGroupBlueprint } from "./commands/slashCommands/slashGroupBlueprint";
 import { registerSlashCommands } from "./commands/slashCommands/registerSlashCommands";

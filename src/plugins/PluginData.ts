@@ -9,7 +9,6 @@ import { AnyPluginBlueprint } from "./PluginBlueprint";
 import { GuildPluginEventManager } from "../events/GuildPluginEventManager";
 import { GlobalPluginEventManager } from "../events/GlobalPluginEventManager";
 import { Client, Guild } from "discord.js";
-import { PluginSlashCommandManager } from "../commands/slashCommands/PluginSlashCommandManager";
 
 export type HasPluginFn = <T extends AnyPluginBlueprint>(plugin: T) => boolean;
 export type GetPluginFn = <T extends AnyPluginBlueprint>(plugin: T) => PluginPublicInterface<T>;
