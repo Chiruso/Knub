@@ -23,7 +23,7 @@ export const messageCommandBaseTypeConverters = {
   number(value: string): number {
     const result = parseFloat(value);
     if (Number.isNaN(result)) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid number`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un número válido`);
     }
 
     return result;
@@ -32,12 +32,12 @@ export const messageCommandBaseTypeConverters = {
   user(value: string, { pluginData: { client } }: CommandContext<AnyPluginData<any>>): User {
     const userId = getUserId(value);
     if (!userId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid user`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un usuario válido`);
     }
 
     const user = client.users.cache.get(userId);
     if (!user) {
-      throw new TypeConversionError(`Could not find user for user id \`${userId}\``);
+      throw new TypeConversionError(`No se encontró un usuario con la ID \`${userId}\``);
     }
 
     return user;
@@ -45,22 +45,22 @@ export const messageCommandBaseTypeConverters = {
 
   member(value: string, { message, pluginData: { client } }: CommandContext<AnyPluginData<any>>): GuildMember {
     if (message.channel.type === ChannelType.DM) {
-      throw new TypeConversionError(`Type 'Member' can only be used in guilds`);
+      throw new TypeConversionError(`'Member' solo puede ser utilizado en servidores`);
     }
 
     const userId = getUserId(value);
     if (!userId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid user id`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un usuario válido`);
     }
 
     const user = client.users.cache.get(userId);
     if (!user) {
-      throw new TypeConversionError(`Could not find user for user id \`${userId}\``);
+      throw new TypeConversionError(`No se encontró un usuario con la ID \`${userId}\``);
     }
 
     const member = message.channel.guild.members.cache.get(user.id);
     if (!member) {
-      throw new TypeConversionError(`Could not find guild member for user id \`${userId}\``);
+      throw new TypeConversionError(`No se encontró un miembro del servidor con la ID \`${userId}\``);
     }
 
     return member;
@@ -68,18 +68,18 @@ export const messageCommandBaseTypeConverters = {
 
   channel(value: string, { message }: CommandContext<AnyPluginData<any>>): Channel {
     if (message.channel.type === ChannelType.DM) {
-      throw new TypeConversionError(`Type 'Channel' can only be used in guilds`);
+      throw new TypeConversionError(`'Channel' solo puede ser utilizado en servidores`);
     }
 
     const channelId = getChannelId(value);
     if (!channelId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid channel`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un canal válido`);
     }
 
     const guild = message.channel.guild;
     const channel = guild.channels.cache.get(channelId);
     if (!channel) {
-      throw new TypeConversionError(`Could not find channel for channel id \`${channelId}\``);
+      throw new TypeConversionError(`No se encontró un canal con la ID \`${channelId}\``);
     }
 
     return channel;
@@ -87,22 +87,22 @@ export const messageCommandBaseTypeConverters = {
 
   textChannel(value: string, { message }: CommandContext<AnyPluginData<any>>): GuildTextBasedChannel {
     if (message.channel.type === ChannelType.DM) {
-      throw new TypeConversionError(`Type 'textChannel' can only be used in guilds`);
+      throw new TypeConversionError(`'textChannel' solo puede ser utilizado en servidores`);
     }
 
     const channelId = getChannelId(value);
     if (!channelId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid channel`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un canal válido`);
     }
 
     const guild = message.channel.guild;
     const channel = guild.channels.cache.get(channelId);
     if (!channel) {
-      throw new TypeConversionError(`Could not find channel for channel id \`${channelId}\``);
+      throw new TypeConversionError(`No se encontró un canal con la ID \`${channelId}\``);
     }
 
     if (!channel.isTextBased()) {
-      throw new TypeConversionError(`Channel \`${channel.name}\` is not a text channel`);
+      throw new TypeConversionError(`El canal \`${channel.name}\` no es un canal de texto`);
     }
 
     return channel;
@@ -110,22 +110,22 @@ export const messageCommandBaseTypeConverters = {
 
   voiceChannel(value: string, { message }: CommandContext<AnyPluginData<any>>): VoiceChannel {
     if (message.channel.type === ChannelType.DM) {
-      throw new TypeConversionError(`Type 'voiceChannel' can only be used in guilds`);
+      throw new TypeConversionError(`'voiceChannel' solo puede ser utilizado en servidores`);
     }
 
     const channelId = getChannelId(value);
     if (!channelId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid channel`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un canal válido`);
     }
 
     const guild = message.channel.guild;
     const channel = guild.channels.cache.get(channelId);
     if (!channel) {
-      throw new TypeConversionError(`Could not find channel for channel id \`${channelId}\``);
+      throw new TypeConversionError(`No se encontró un canal con la ID \`${channelId}\``);
     }
 
     if (channel.type !== ChannelType.GuildVoice) {
-      throw new TypeConversionError(`Channel \`${channel.name}\` is not a voice channel`);
+      throw new TypeConversionError(`El canal \`${channel.name}\` no es un canal de voz`);
     }
 
     return channel;
@@ -133,17 +133,17 @@ export const messageCommandBaseTypeConverters = {
 
   role(value: string, { message }: CommandContext<AnyPluginData<any>>): Role {
     if (message.channel.type === ChannelType.DM) {
-      throw new TypeConversionError(`Type 'Role' can only be used in guilds`);
+      throw new TypeConversionError(`'Role' solo puede ser utilizado en servidores`);
     }
 
     const roleId = getRoleId(value);
     if (!roleId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid role`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un rol válido`);
     }
 
     const role = message.channel.guild.roles.cache.get(roleId);
     if (!role) {
-      throw new TypeConversionError(`Could not find role for role id \`${roleId}\``);
+      throw new TypeConversionError(`No se encontró un rol con la ID \`${roleId}\``);
     }
 
     return role;
@@ -152,7 +152,7 @@ export const messageCommandBaseTypeConverters = {
   userId(value: string): string {
     const userId = getUserId(value);
     if (!userId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid user`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un usuario válido`);
     }
 
     return userId;
@@ -161,7 +161,7 @@ export const messageCommandBaseTypeConverters = {
   channelId(value: string): string {
     const channelId = getChannelId(value);
     if (!channelId) {
-      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` is not a valid channel`);
+      throw new TypeConversionError(`\`${disableCodeBlocks(value)}\` no es un canal válido`);
     }
 
     return channelId;

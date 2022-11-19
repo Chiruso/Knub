@@ -94,7 +94,7 @@ export class PluginMessageCommandManager<TPluginData extends AnyPluginData<any>>
 
     if (isError(command)) {
       const usageLine = getMessageCommandSignature(command.command);
-      void msg.channel.send(`${command.error}\nUsage: \`${usageLine}\``);
+      void msg.channel.send(`${command.error}\nUso: \`${usageLine}\``);
       return;
     }
 
