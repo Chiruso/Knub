@@ -30,6 +30,7 @@ import { GlobalPluginEventManager } from "../events/GlobalPluginEventManager";
 import { typedGlobalEventListener, typedGuildEventListener } from "../events/EventListenerBlueprint";
 import { guildPluginMessageCommand } from "../commands/messageCommands/messageCommandBlueprint";
 import { TextChannel } from "discord.js";
+import { PluginSlashCommandManager } from "../commands/slashCommands/PluginSlashCommandManager";
 
 type AssertEquals<TActual, TExpected> = TActual extends TExpected ? true : false;
 
